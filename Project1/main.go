@@ -9,7 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
+ "sort"
 	"github.com/olekukonko/tablewriter"
 )
 
@@ -30,11 +30,11 @@ func main() {
 	// First-come, first-serve scheduling
 	FCFSSchedule(os.Stdout, "First-come, first-serve", processes)
 
-	//SJFSchedule(os.Stdout, "Shortest-job-first", processes)
-	//
+	SJFSchedule(os.Stdout, "Shortest-job-first", processes)
+	
 	//SJFPrioritySchedule(os.Stdout, "Priority", processes)
 	//
-	//RRSchedule(os.Stdout, "Round-robin", processes)
+	RRSchedule(os.Stdout, "Round-robin", processes)
 }
 
 func openProcessingFile(args ...string) (*os.File, func(), error) {
@@ -127,12 +127,170 @@ func FCFSSchedule(w io.Writer, title string, processes []Process) {
 	outputSchedule(w, schedule, aveWait, aveTurnaround, aveThroughput)
 }
 
-//func SJFPrioritySchedule(w io.Writer, title string, processes []Process) { }
-//
-//func SJFSchedule(w io.Writer, title string, processes []Process) { }
-//
-//func RRSchedule(w io.Writer, title string, processes []Process) { }
+//func SJFPrioritySchedule(w io.Writer, title string, processes []Process) {
 
+
+// }
+//
+func SJFSchedule(w io.Writer, title string, processes []Process) {
+	sort.Slice(processes, func(i, j int) bool {
+        return processes[i].BurstDuration < processes[j].BurstDuration
+    })
+
+    var (
+        serviceTime     int64
+        totalTurnaround float64
+        lastCompletion  float64
+        waitingTime     int64
+        schedule        = make([][]string, len(processes))
+        gantt           = make([]TimeSlice, 0)
+    )
+    remainingBurst := make([]int64, len(processes))
+
+    for i := range processes {
+        remainingBurst[i] = processes[i].BurstDuration
+    }
+
+    for {
+        allCompleted := true
+        minRemainingBurst := int64(1<<63 - 1)
+        minIndex := -1
+        for i := range processes {
+            if processes[i].ArrivalTime <= serviceTime && remainingBurst[i] > 0 {
+                allCompleted = false
+                if remainingBurst[i] < minRemainingBurst {
+                    minRemainingBurst = remainingBurst[i]
+                    minIndex = i
+                }
+            }
+        }
+
+        if allCompleted {
+            break
+        }
+
+        for i := range processes {
+            if processes[i].ArrivalTime <= serviceTime && remainingBurst[i] > 0 && i != minIndex {
+                waitingTime++
+            }
+        }
+
+        start := serviceTime
+        serviceTime++
+        remainingBurst[minIndex]--
+
+        if remainingBurst[minIndex] == 0 {
+            turnaround := serviceTime - processes[minIndex].ArrivalTime
+            totalTurnaround += float64(turnaround)
+            completion := serviceTime
+            lastCompletion = float64(completion)
+
+            schedule[minIndex] = []string{
+                fmt.Sprint(processes[minIndex].ProcessID),
+                fmt.Sprint(processes[minIndex].Priority),
+                fmt.Sprint(processes[minIndex].BurstDuration),
+                fmt.Sprint(processes[minIndex].ArrivalTime),
+                fmt.Sprint(waitingTime),
+                fmt.Sprint(turnaround),
+                fmt.Sprint(completion),
+            }
+
+            gantt = append(gantt, TimeSlice{
+                PID:   processes[minIndex].ProcessID,
+                Start: start,
+                Stop:  serviceTime,
+            })
+        }
+    }
+
+    count := float64(len(processes))
+    aveWait := float64(waitingTime) / count
+    aveTurnaround := totalTurnaround / count
+    aveThroughput := count / lastCompletion
+
+    outputTitle(w, title)
+    outputGantt(w, gantt)
+    outputSchedule(w, schedule, aveWait, aveTurnaround, aveThroughput)
+}
+
+//
+func RRSchedule(w io.Writer, title string, processes []Process) { 
+	var (
+		serviceTime     int64 
+		totalTurnaround float64
+		lastCompletion  float64
+		waitingTime     int64
+		schedule        = make([][]string, len(processes))
+		gantt           = make([]TimeSlice, 0)
+		remainingBurst  = make([]int64, len(processes))
+	)
+
+	// Burst
+	for i := range processes {
+		remainingBurst[i] = processes[i].BurstDuration
+	}
+
+	for {
+		allCompleted := true
+		minRemainingBurst := int64(1<<63 - 1)
+		minIndex := -1
+		for i := range processes {
+			if processes[i].ArrivalTime <= serviceTime && remainingBurst[i] > 0 {
+				allCompleted = false
+				if remainingBurst[i] < minRemainingBurst {
+					minRemainingBurst = remainingBurst[i]
+					minIndex = i
+				}
+			}
+		}
+
+		if allCompleted {
+			break
+		}
+
+		for i := range processes {
+			if processes[i].ArrivalTime <= serviceTime && remainingBurst[i] > 0 && i != minIndex {
+				waitingTime++
+			}
+		}
+
+		start := serviceTime
+		serviceTime++
+		remainingBurst[minIndex]-- // Decrement
+
+		if remainingBurst[minIndex] == 0 {
+			turnaround := serviceTime - processes[minIndex].ArrivalTime
+			totalTurnaround += float64(turnaround)
+			completion := serviceTime
+			lastCompletion = float64(completion)
+
+			schedule[minIndex] = []string{
+				fmt.Sprint(processes[minIndex].ProcessID),
+				fmt.Sprint(processes[minIndex].Priority),
+				fmt.Sprint(processes[minIndex].BurstDuration),
+				fmt.Sprint(processes[minIndex].ArrivalTime),
+				fmt.Sprint(waitingTime),
+				fmt.Sprint(turnaround),
+				fmt.Sprint(completion),
+			}
+
+			gantt = append(gantt, TimeSlice{
+				PID:   processes[minIndex].ProcessID,
+				Start: start,
+				Stop:  serviceTime,
+			})
+		}
+	}
+
+	count := float64(len(processes))
+	aveWait := float64(waitingTime) / count
+	aveTurnaround := totalTurnaround / count
+	aveThroughput := count / lastCompletion
+
+	outputTitle(w, title)
+	outputGantt(w, gantt)
+	outputSchedule(w, schedule, aveWait, aveTurnaround, aveThroughput)
+}
 //endregion
 
 //region Output helpers
