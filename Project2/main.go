@@ -9,7 +9,7 @@ import (
 	"os/user"
 	"strings"
 
-	"github.com/jh125486/CSCE4600/Project2/builtins"
+	"github.com/miguelmendez418/CSCE4600/Project2/builtins"
 )
 
 func main() {
@@ -81,6 +81,28 @@ func handleInput(w io.Writer, input string, exit chan<- struct{}) error {
 	case "exit":
 		exit <- struct{}{}
 		return nil
+	case "pwd":
+		builtins.PrintWorkingDirectory()
+		return nil
+	case "alias":
+		// Example: alias new_command='original_command'
+		if len(args) == 1 {
+			builtins.PrintAliases()
+			return nil
+		} else if len(args) == 3 && args[1] == "=" {
+			builtins.SetAlias(args[0], args[2])
+			return nil
+		} else {
+			fmt.Println("Invalid alias syntax. Use 'alias alias_name=command'")
+			return nil
+		}
+	case "break":
+		return builtins.BreakCommand()
+	case "exec":
+		return builtins.ExecCommand(args...)
+	case "bind":
+		return builtins.BindCommand(args...)
+
 	}
 
 	return executeCommand(name, args...)
