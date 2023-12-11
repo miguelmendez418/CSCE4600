@@ -21,8 +21,8 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
-    - name: Run tests
-      run: go test -v ./...
+    - name: Run tests with coverage
+      run: go test -v -coverprofile=coverage.out ./...
 
   coverage:
     runs-on: ubuntu-latest
@@ -43,8 +43,6 @@ jobs:
 
     - name: Run tests with coverage
       run: go test -v -coverprofile=coverage.out ./...
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v2
-      with:
-        file: ./coverage.out
+      
+    - name: Display coverage summary
+      run: go tool cover -func=coverage.out
